@@ -1,62 +1,86 @@
+from PIL import Image
+from translate import Translator
+from deep_translator import GoogleTranslator
 import cv2 as cv
-import pytesseract
-pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
-from googletrans import Translator
-translator = Translator()
+import pytesseract as ocr
+from pre_processing import get_grayscale
+from dataclasses import dataclass
 import unidecode
+import numpy as np
+import sys
+if sys.platform.startswith('win32') or sys.platform.startswith('cygwin'):
+    try:
+        ocr.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+    except FileNotFoundError as err:
+        raise (
+            'Se você está utilizando o sistema Windows, favor instalar o Tesseract-OCR',
+            err)
 
-# Aqui você define sua lingua
-# "ko" = korean | "en" = english | "ar" = arabic |
-#  No nosso caso, "pt" - Português
-targeted_lang= "pt"
+def translate(word) -> str:
+    try:
+        word_translated = GoogleTranslator('en', 'pt').translate(word)
+        removed_unwanted_characters = unidecode.unidecode(word_translated)  # remove weird shit
+        print(removed_unwanted_characters)
+    except Exception:
+        removed_unwanted_characters = word
+    finally:
+        return removed_unwanted_characters
 
-# função principal para traduzir a HQ
-def put_text_page(data, img):
-    font = cv.FONT_HERSHEY_SIMPLEX
-    for x,b in enumerate(data.splitlines()):
-        if x != 0:
-           b = b.split()
-           if len(b)==12:
-                x,y,w,h = int(b[6]), int(b[7]), int(b[8]), int(b[9])
-                
-                cv.rectangle(img,(x , y), (w+x, h+y), (255,255,255), -1)
+def file_writer(num: int, img: Image) -> None:
+    cv.imwrite(f'Page Translated{num}.jpg', img)
+    print(f'PAGE {num} COMPLETED')
 
+@dataclass
+class FileData:
+    img: Image
+
+    def get_data_from_file(self) -> str:
+        custom_config = r'--oem 3 --psm 12'
+        data = ocr.image_to_data(self.img, lang="eng", config=custom_config)
+        print(data)
+        return data
+                           
+
+@dataclass
+class TextPlacer:
+    data: str
+    img: Image
+
+    def put_text_in_page(self) -> None:
+        font = cv.FONT_HERSHEY_COMPLEX_SMALL
+        for x, b in enumerate(self.data.splitlines()):
+            if x != 0:
+                b = b.split()
+            if len(b) == 12:
+                x, y, w, h = int(b[6]), int(b[7]), int(b[8]), int(b[9])
+                cv.rectangle(self.img, (x, y), (w+x, h+y), (255, 255, 255), -1)
                 word = b[11]
-                
-                word_translated = translator.translate(text=word, dest=targeted_lang) # Tradução
-                
-                word_translated = unidecode.unidecode(word_translated.text) # Formata o texto
-                
-                cv.putText(img, word_translated, (x+10, y+40), font, 1, (0, 0, 0), 1) # Insere o texto traduzido na tela
+                try:
+                    word_translated = translate(word)
+                except ValueError as err:
+                    print(str(err))
+                    continue
+                cv.putText(self.img, word_translated, (x-7, y+20),
+                            font, 1, (0, 0, 0), 1)  # put text on the screen
 
-# função que extrai o texto da tela com tesseract ocr
-def read_text(img):
-    data = pytesseract.image_to_data(img)
-    print(data)
-    return data
+@dataclass
+class ComicTranslator:
+    file_path: str
+    initial_page: int
+    final_page: int
+    target_lang: str
 
-def main():
-    # Aqui você define quantas paginas tem a HQ
-    # Digite o numero da ultima pagina
-    
-    number_initial_page = 1
-    number_final_page = 8
+    def translate_comic(self) -> None:
+        while self.initial_page < self.final_page:
+            num = self.initial_page
+            img = cv.imread(self.file_path)
+            img = get_grayscale(img)
+            data = FileData(img).get_data_from_file()
+            textPlacer = TextPlacer(data, img)
+            textPlacer.put_text_in_page()
 
-    # loop por cada página e traduza-a..
-    while number_initial_page < number_final_page:
-        num = str(number_initial_page)
-        img = cv.imread('nome_hq_page_'+num+'.jpg')
-        img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            file_writer(num, img)
 
-        data = read_text(img)
-        put_text_page(data, img)
+            self.initial_page += 1
 
-
-        cv.imwrite('Página Traduzida'+num+'.png', img)
-        print("Página "+num+" Traduzida.")
-
-        number_initial_page += 1
-
-    print('HQ traduzida com sucesso!')
-
-main()
+        print('COMIC-BOOK TRANSLATED SUCCESSFULLY!')
