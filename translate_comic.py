@@ -1,4 +1,5 @@
 import argparse
+from typing import List
 from comic_translator import ComicTranslator
 
 parser = argparse.ArgumentParser(
@@ -16,16 +17,15 @@ parser.add_argument('page_range', metavar='-r', type=str,
 arguments = parser.parse_args()
 
 
-def get_page_numbers(page_range):
+def get_page_numbers(page_range) -> List[int]:
     if len(page_range) == 1:
         return [int(page_range), int(page_range)+1]
-    return page_range.split('-')
+    return [int(page) for page in page_range.split('-')]
 
 
 initial_page, final_page = get_page_numbers(arguments.page_range)
 
 
-comic = ComicTranslator(
-    arguments.target_lang, arguments.file, int(initial_page), int(final_page))
+comic = ComicTranslator(arguments.file, initial_page, final_page, arguments.target_lang)
 
-comic.run()
+comic.translate_comic()
