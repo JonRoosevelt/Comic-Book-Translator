@@ -1,0 +1,9 @@
+.idea/
+venv/
+.venv/
+env/
+secrets.json
+__pycache__/
+*.mka
+.pytest_cache
+
