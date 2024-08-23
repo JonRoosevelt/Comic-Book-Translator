@@ -6,4 +6,5 @@ secrets.json
 __pycache__/
 *.mka
 .pytest_cache
+.DS_Store
 
